@@ -1,69 +1,86 @@
-import streamlit as st
-import pickle
 import re
-import string
+import pickle
+import numpy as np
+import streamlit as st
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
-from nltk.tokenize import word_tokenize
-import nltk
 
-nltk.download('stopwords')
-nltk.download('punkt')
-nltk.download('wordnet')
-nltk.download('punkt_tab')
+# ---------------------------
+# Config
+# ---------------------------
+MAX_LENGTH = 15
+MODEL_PATH = "bilstm_hate_speech.keras"
+TOKENIZER_PATH = "tokenizer.pkl"
 
-# Must match training: max_length and vocab_size used when the tokenizer
-# and model were trained in the notebook.
-max_length = 100
+CLASS_NAMES = {
+    0: "Hate Speech",
+    1: "Offensive Language",
+    2: "Neither"
+}
 
-model = load_model('hate_speech_model.h5')
+CLASS_COLORS = {
+    0: "🔴",
+    1: "🟠",
+    2: "🟢"
+}
 
-with open('tokenizer.pickle', 'rb') as handle:
-    tokenizer = pickle.load(handle)
-
-stop_words = set(stopwords.words('english'))
-lemmatizer = WordNetLemmatizer()
-
-class_names = ['Hate Speech', 'Offensive Language', 'Neither']
-
-
+# ---------------------------
+# Same cleaning function used in training
+# ---------------------------
 def clean_text(text):
     text = text.lower()
-    text = re.sub(r'http\S+|www\S+', '', text)
-    text = re.sub(r'\d+', '', text)
-    text = text.translate(str.maketrans('', '', string.punctuation))
-    tokens = word_tokenize(text)
-    tokens = [word for word in tokens if word not in stop_words]
-    tokens = [lemmatizer.lemmatize(word) for word in tokens]
-    return ' '.join(tokens)
+    text = re.sub(r"http\S+|www\S+", "", text)
+    text = re.sub(r"<.*?>", "", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
+# ---------------------------
+# Load model + tokenizer (cached so it only loads once)
+# ---------------------------
+@st.cache_resource
+def load_artifacts():
+    model = load_model(MODEL_PATH)
+    with open(TOKENIZER_PATH, "rb") as f:
+        tokenizer = pickle.load(f)
+    return model, tokenizer
 
-st.set_page_config(page_title='Hate Speech Detection', page_icon='🛡️')
+model, tokenizer = load_artifacts()
 
-st.title('Hate Speech Detection')
-st.write('Enter text below to check whether it contains hate speech.')
+# ---------------------------
+# Prediction function
+# ---------------------------
+def predict(text):
+    cleaned = clean_text(text)
+    seq = tokenizer.texts_to_sequences([cleaned])
+    padded = pad_sequences(seq, maxlen=MAX_LENGTH, padding="post", truncating="post")
+    probs = model.predict(padded, verbose=0)[0]
+    pred_class = int(np.argmax(probs))
+    return pred_class, probs
 
-user_input = st.text_area('Text input', height=150)
+# ---------------------------
+# UI
+# ---------------------------
+st.set_page_config(page_title="Hate Speech Detector", page_icon="🛡️", layout="centered")
 
-if st.button('Predict'):
-    if user_input.strip() == '':
-        st.warning('Please enter some text.')
+st.title("🛡️ Hate Speech Detection")
+st.write("Enter a tweet or sentence below to classify it as **Hate Speech**, **Offensive Language**, or **Neither**.")
+
+user_input = st.text_area("Enter text:", height=120, placeholder="Type or paste text here...")
+
+if st.button("Classify", type="primary"):
+    if not user_input.strip():
+        st.warning("Please enter some text first.")
     else:
-        cleaned = clean_text(user_input)
-        sequence = tokenizer.texts_to_sequences([cleaned])
-        padded = pad_sequences(sequence, maxlen=max_length, padding='post', truncating='post')
+        pred_class, probs = predict(user_input)
+        label = CLASS_NAMES[pred_class]
+        emoji = CLASS_COLORS[pred_class]
 
-        prediction = model.predict(padded)
-        predicted_class = prediction.argmax(axis=1)[0]
-        confidence = prediction[0][predicted_class]
+        st.subheader(f"{emoji} Prediction: {label}")
+        st.write(f"Confidence: **{probs[pred_class]*100:.2f}%**")
 
-        st.subheader('Prediction: ' + class_names[predicted_class])
-        st.write('Confidence: ' + str(round(confidence * 100, 2)) + '%')
+        st.write("### Class Probabilities")
+        for cls_idx, cls_name in CLASS_NAMES.items():
+            st.progress(float(probs[cls_idx]), text=f"{cls_name}: {probs[cls_idx]*100:.2f}%")
 
-        with st.expander('Show class probabilities'):
-            index = 0
-            while index < len(class_names):
-                st.write(class_names[index] + ': ' + str(round(prediction[0][index] * 100, 2)) + '%')
-                index = index + 1
+st.markdown("---")
+st.caption("Model: Bidirectional LSTM trained on the Davidson Hate Speech dataset.")
