@@ -28,7 +28,8 @@ def clean_text(text):
 
 labels = {
     0: "Hate Speech",
-    1: "Not Hateful"
+    1: "Offensive Language",
+    2: "Neither
 }
 
 user_input = st.text_area("Your text:")
