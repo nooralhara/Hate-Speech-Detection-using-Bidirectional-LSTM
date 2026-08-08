@@ -10,7 +10,7 @@ st.write("Enter a tweet or sentence to classify it.")
 
 @st.cache_resource
 def load_assets():
-    model = load_model('hate_speech_lstm_model.keras')
+    model = load_model('bilstm_hate_speech.keras')
     with open('tokenizer.pkl', 'rb') as f:
         tokenizer = pickle.load(f)
     return model, tokenizer
