@@ -5,7 +5,7 @@ import streamlit as st
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-MAX_LENGTH = 15
+MAX_LENGTH = 40
 MODEL_PATH = "bilstm_hate_speech.keras"
 TOKENIZER_PATH = "tokenizer.pkl"
 
@@ -16,11 +16,15 @@ CLASS_NAMES = {
 }
 
 def clean_text(text):
-    text = text.lower()
-    text = re.sub(r"http\S+|www\S+", "", text)
-    text = re.sub(r"<.*?>", "", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+  text= text.lower()
+  text = re.sub(r"http\S+\www\S+" , "", text)
+  text = re.sub(r"<.*?>", "", text)
+  text = re.sub(r"[^a-z\s]", "", text)
+  words = text.split()
+  words = [lemmatizer.lemmatize(w) for w in words if w not in stop_words]
+  text = " ".join(words)
+  text = re.sub(r"\s+", " ", text)
+  return text.strip()
 
 @st.cache_resource
 def load_artifacts():
