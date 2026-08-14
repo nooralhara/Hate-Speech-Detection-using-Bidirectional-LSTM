@@ -2,6 +2,9 @@ import re
 import pickle
 import numpy as np
 import streamlit as st
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.corpus import stopwords
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
@@ -15,16 +18,29 @@ CLASS_NAMES = {
     2: "Neither"
 }
 
+@st.cache_resource
+def load_nlp_tools():
+    for pkg in ['wordnet', 'stopwords', 'omw-1.4']:
+        try:
+            nltk.data.find(f'corpora/{pkg}')
+        except LookupError:
+            nltk.download(pkg)
+    lemmatizer = WordNetLemmatizer()
+    stop_words = set(stopwords.words('english'))
+    return lemmatizer, stop_words
+
+lemmatizer, stop_words = load_nlp_tools()
+
 def clean_text(text):
-  text= text.lower()
-  text = re.sub(r"http\S+\www\S+" , "", text)
-  text = re.sub(r"<.*?>", "", text)
-  text = re.sub(r"[^a-z\s]", "", text)
-  words = text.split()
-  words = [lemmatizer.lemmatize(w) for w in words if w not in stop_words]
-  text = " ".join(words)
-  text = re.sub(r"\s+", " ", text)
-  return text.strip()
+    text = text.lower()
+    text = re.sub(r"http\S+\www\S+", "", text)
+    text = re.sub(r"<.*?>", "", text)
+    text = re.sub(r"[^a-z\s]", "", text)
+    words = text.split()
+    words = [lemmatizer.lemmatize(w) for w in words if w not in stop_words]
+    text = " ".join(words)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 @st.cache_resource
 def load_artifacts():
